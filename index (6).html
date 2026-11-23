@@ -1,0 +1,2139 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ORBIT-09 // Trajectory & Spacetime Flight Computer</title>
+  <style>
+    :root {
+      --bg-void: #090a0d;
+      --bg-chassis: #111318;
+      --bg-module: #161920;
+      --bg-recess: #0c0e12;
+      --border-hairline: #262b36;
+      --border-strong: #384050;
+      --text-main: #eceef2;
+      --text-dim: #8a93a6;
+      --text-muted: #565e70;
+      --amber: #f59e0b;
+      --amber-soft: rgba(245, 158, 11, 0.14);
+      --emerald: #10b981;
+      --emerald-soft: rgba(16, 185, 129, 0.14);
+      --crimson: #ef4444;
+      --crimson-soft: rgba(239, 68, 68, 0.14);
+      --violet: #a78bfa;
+      --font-sans: -apple-system, BlinkMacSystemFont, "Pretendard", "Malgun Gothic", "맑은 고딕", sans-serif;
+      --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      --ui-scale: 1;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      background-color: var(--bg-void);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      font-size: calc(14px * var(--ui-scale));
+      overflow-x: hidden;
+    }
+
+    /* 전체 워크스테이션 프레임 */
+    .workstation {
+      display: flex;
+      flex-direction: column;
+      min-height: 100vh;
+      height: 100vh;
+      max-height: 100vh;
+    }
+
+    /* 상단 계기판 헤더 */
+    .topbar {
+      height: 46px;
+      min-height: 46px;
+      background: var(--bg-chassis);
+      border-bottom: 1px solid var(--border-hairline);
+      padding: 0 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      user-select: none;
+    }
+
+    .sys-id {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: var(--text-main);
+      white-space: nowrap;
+    }
+
+    .status-led {
+      width: 8px;
+      height: 8px;
+      background: var(--amber);
+      box-shadow: 0 0 8px var(--amber);
+      display: inline-block;
+    }
+
+    .sys-sub {
+      color: var(--text-dim);
+      font-weight: 400;
+      font-size: 0.74rem;
+    }
+
+    /* 스테이지 셀렉터 스위치 */
+    .stage-strip {
+      display: flex;
+      align-items: center;
+      gap: 3px;
+      overflow-x: auto;
+    }
+
+    .st-key {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 700;
+      background: var(--bg-recess);
+      color: var(--text-dim);
+      border: 1px solid var(--border-hairline);
+      padding: 4px 9px;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: background 0.12s, color 0.12s, border-color 0.12s;
+    }
+
+    .st-key:hover {
+      border-color: var(--text-dim);
+      color: var(--text-main);
+    }
+
+    .st-key.active {
+      background: var(--amber);
+      color: #090a0d;
+      border-color: var(--amber);
+    }
+
+    .st-key.cleared {
+      border-color: var(--emerald);
+      color: var(--emerald);
+    }
+
+    .st-key.active.cleared {
+      background: var(--emerald);
+      color: #090a0d;
+    }
+
+    /* 화면 크기 & 디스플레이 컨트롤 */
+    .display-controls {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+
+    .seg-group {
+      display: inline-flex;
+      border: 1px solid var(--border-hairline);
+      border-radius: 2px;
+      overflow: hidden;
+      background: var(--bg-recess);
+    }
+
+    .seg-btn {
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      font-weight: 600;
+      background: transparent;
+      color: var(--text-dim);
+      border: none;
+      border-right: 1px solid var(--border-hairline);
+      padding: 4px 8px;
+      cursor: pointer;
+    }
+
+    .seg-btn:last-child {
+      border-right: none;
+    }
+
+    .seg-btn:hover {
+      color: var(--text-main);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    .seg-btn.active {
+      background: var(--bg-module);
+      color: var(--amber);
+    }
+
+    .ctrl-toggle {
+      font-family: var(--font-mono);
+      font-size: 0.71rem;
+      font-weight: 600;
+      background: var(--bg-recess);
+      color: var(--text-dim);
+      border: 1px solid var(--border-hairline);
+      padding: 4px 9px;
+      border-radius: 2px;
+      cursor: pointer;
+    }
+
+    .ctrl-toggle:hover {
+      border-color: var(--border-strong);
+      color: var(--text-main);
+    }
+
+    .ctrl-toggle.on {
+      border-color: rgba(245, 158, 11, 0.5);
+      color: var(--amber);
+      background: var(--amber-soft);
+    }
+
+    /* 메인 스플릿 작업 영역 */
+    .workspace-split {
+      flex: 1;
+      display: flex;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    /* 좌측 오실로스코프 / 항법 플로터 */
+    .scope-pane {
+      flex: 1;
+      min-width: 320px;
+      display: flex;
+      flex-direction: column;
+      background: #07080b;
+      position: relative;
+    }
+
+    .canvas-mount {
+      flex: 1;
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+    }
+
+    /* 플로터 내부 오버레이 HUD (모서리 계측기) */
+    .hud-tl {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      pointer-events: none;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      color: var(--text-dim);
+      background: rgba(9, 10, 13, 0.78);
+      border: 1px solid var(--border-hairline);
+      padding: 5px 9px;
+      border-radius: 2px;
+      display: flex;
+      gap: 12px;
+    }
+
+    .hud-tl strong {
+      color: var(--text-main);
+    }
+
+    .hud-tr {
+      position: absolute;
+      top: 12px;
+      right: 12px;
+      display: flex;
+      gap: 4px;
+      background: rgba(9, 10, 13, 0.82);
+      border: 1px solid var(--border-hairline);
+      padding: 3px;
+      border-radius: 2px;
+    }
+
+    .zoom-btn {
+      font-family: var(--font-mono);
+      font-size: 0.74rem;
+      font-weight: 700;
+      background: transparent;
+      border: none;
+      color: var(--text-dim);
+      padding: 3px 7px;
+      cursor: pointer;
+    }
+
+    .zoom-btn:hover {
+      color: var(--amber);
+      background: rgba(255, 255, 255, 0.05);
+    }
+
+    .hud-bl {
+      position: absolute;
+      bottom: 10px;
+      left: 12px;
+      pointer-events: none;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      font-family: var(--font-mono);
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      background: rgba(9, 10, 13, 0.78);
+      border: 1px solid var(--border-hairline);
+      padding: 5px 10px;
+      border-radius: 2px;
+    }
+
+    .leg {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .leg-mark {
+      width: 8px;
+      height: 8px;
+      display: inline-block;
+    }
+
+    /* 드래그 크기 조절 스플리터 */
+    .resizer-bar {
+      width: 6px;
+      background: var(--bg-chassis);
+      border-left: 1px solid var(--border-hairline);
+      border-right: 1px solid var(--border-hairline);
+      cursor: col-resize;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.15s;
+      user-select: none;
+      z-index: 10;
+    }
+
+    .resizer-bar:hover,
+    .resizer-bar.dragging {
+      background: var(--amber);
+    }
+
+    .resizer-grip {
+      width: 2px;
+      height: 28px;
+      background: var(--border-strong);
+    }
+
+    /* 우측 비행 제어 콘솔 */
+    .console-pane {
+      width: 390px;
+      min-width: 300px;
+      max-width: 620px;
+      background: var(--bg-chassis);
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+    }
+
+    .console-pane.collapsed {
+      display: none;
+    }
+
+    .module {
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--border-hairline);
+    }
+
+    .module-label {
+      font-family: var(--font-mono);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .module-label span.tag {
+      color: var(--amber);
+      background: var(--amber-soft);
+      padding: 2px 6px;
+      border-radius: 2px;
+      letter-spacing: 0.04em;
+    }
+
+    .mission-name {
+      font-size: 1.02rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 6px;
+      letter-spacing: -0.01em;
+    }
+
+    .mission-copy {
+      font-size: 0.83rem;
+      line-height: 1.55;
+      color: var(--text-dim);
+    }
+
+    /* 좌표 텔레메트리 그리드 */
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .tele-cell {
+      background: var(--bg-recess);
+      border: 1px solid var(--border-hairline);
+      padding: 8px 10px;
+      border-radius: 2px;
+    }
+
+    .tele-cell small {
+      display: block;
+      font-family: var(--font-mono);
+      font-size: 0.67rem;
+      color: var(--text-muted);
+      letter-spacing: 0.06em;
+      margin-bottom: 3px;
+    }
+
+    .tele-cell strong {
+      font-family: var(--font-mono);
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
+
+    /* 수식 입력 터미널 */
+    .input-terminal {
+      display: flex;
+      align-items: center;
+      background: var(--bg-recess);
+      border: 1px solid var(--border-strong);
+      border-radius: 2px;
+      padding: 9px 12px;
+      gap: 8px;
+      margin-bottom: 8px;
+      transition: border-color 0.15s;
+    }
+
+    .input-terminal:focus-within {
+      border-color: var(--amber);
+    }
+
+    .fn-prompt {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 700;
+      color: var(--amber);
+      user-select: none;
+    }
+
+    #formulaInput {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: var(--text-main);
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 600;
+      width: 100%;
+    }
+
+    #formulaInput::placeholder {
+      color: var(--text-muted);
+      font-weight: 400;
+      font-size: 0.85rem;
+    }
+
+    /* 물리 키캡 그리드 */
+    .keycap-row {
+      display: grid;
+      grid-template-columns: repeat(9, 1fr);
+      gap: 4px;
+      margin-bottom: 10px;
+    }
+
+    .keycap {
+      font-family: var(--font-mono);
+      font-size: 0.76rem;
+      font-weight: 600;
+      background: var(--bg-module);
+      color: var(--text-main);
+      border: 1px solid var(--border-hairline);
+      border-bottom: 2px solid #07080b;
+      padding: 6px 0;
+      border-radius: 2px;
+      cursor: pointer;
+      transition: background 0.1s, border-color 0.1s;
+    }
+
+    .keycap:hover {
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+
+    .keycap:active {
+      transform: translateY(1px);
+    }
+
+    /* 비행 모드 옵션 */
+    .switch-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      background: var(--bg-recess);
+      border: 1px solid var(--border-hairline);
+      padding: 8px 10px;
+      border-radius: 2px;
+      margin-bottom: 10px;
+      font-size: 0.78rem;
+    }
+
+    .switch-line label {
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .switch-line span {
+      color: var(--text-dim);
+      font-size: 0.71rem;
+    }
+
+    input[type="checkbox"] {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--amber);
+      cursor: pointer;
+    }
+
+    /* 실행 버튼 */
+    .cmd-row {
+      display: grid;
+      grid-template-columns: 1.7fr 0.65fr 0.65fr;
+      gap: 6px;
+    }
+
+    .cmd-btn {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      font-weight: 700;
+      padding: 10px 8px;
+      border-radius: 2px;
+      border: 1px solid var(--border-hairline);
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      transition: filter 0.15s, background 0.15s;
+    }
+
+    .cmd-btn:active {
+      transform: translateY(1px);
+    }
+
+    .cmd-exec {
+      background: var(--amber);
+      color: #090a0d;
+      border-color: var(--amber);
+    }
+
+    .cmd-exec:hover {
+      filter: brightness(1.08);
+    }
+
+    .cmd-sec {
+      background: var(--bg-module);
+      color: var(--text-main);
+    }
+
+    .cmd-sec:hover {
+      border-color: var(--text-dim);
+    }
+
+    .cmd-next {
+      width: 100%;
+      margin-top: 8px;
+      background: var(--emerald);
+      color: #06110c;
+      border-color: var(--emerald);
+    }
+
+    /* 상태 로그 박스 */
+    .log-output {
+      margin-top: 10px;
+      padding: 9px 11px;
+      border-radius: 2px;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      display: none;
+      border-left: 3px solid transparent;
+    }
+
+    .log-output.show {
+      display: block;
+    }
+
+    .log-output.info {
+      background: rgba(255, 255, 255, 0.04);
+      border-left-color: var(--text-dim);
+      color: var(--text-main);
+    }
+
+    .log-output.ok {
+      background: var(--emerald-soft);
+      border-left-color: var(--emerald);
+      color: #d1fae5;
+    }
+
+    .log-output.err {
+      background: var(--crimson-soft);
+      border-left-color: var(--crimson);
+      color: #fee2e2;
+    }
+
+    .log-output.hint {
+      background: var(--amber-soft);
+      border-left-color: var(--amber);
+      color: #fef3c7;
+    }
+
+    /* 일반 함수 문법 레퍼런스 (답이 아닌 일반형만 표기) */
+    .syntax-table {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+    }
+
+    .syn-item {
+      background: var(--bg-recess);
+      border: 1px solid var(--border-hairline);
+      padding: 6px 8px;
+      border-radius: 2px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 4px;
+      color: var(--text-dim);
+    }
+
+    .syn-item code {
+      color: var(--text-main);
+      font-weight: 600;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 900px) {
+      .workstation {
+        height: auto;
+        max-height: none;
+      }
+      .workspace-split {
+        flex-direction: column;
+      }
+      .scope-pane {
+        height: 420px;
+        min-height: 320px;
+      }
+      .resizer-bar {
+        display: none;
+      }
+      .console-pane {
+        width: 100%;
+        max-width: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="workstation">
+    <!-- 상단 계기판 바 -->
+    <header class="topbar">
+      <div class="sys-id">
+        <span class="status-led"></span>
+        <span>ORBIT-09</span>
+        <span class="sys-sub">// FUNCTION NAVIGATION</span>
+      </div>
+
+      <!-- 스테이지 선택기 -->
+      <nav class="stage-strip" id="stageStrip"></nav>
+
+      <!-- 화면 크기 & 뷰포트 컨트롤 -->
+      <div class="display-controls">
+        <div class="seg-group" title="화면 인터페이스 비율 조절">
+          <button class="seg-btn" id="scale85" onclick="setUiScale(0.88, 'scale85')">작게</button>
+          <button class="seg-btn active" id="scale100" onclick="setUiScale(1, 'scale100')">보통</button>
+          <button class="seg-btn" id="scale115" onclick="setUiScale(1.12, 'scale115')">크게</button>
+        </div>
+        <button class="ctrl-toggle" id="btnFocusView" onclick="toggleFocusView()" title="레이더 화면 최대화">레이더 확장</button>
+        <button class="ctrl-toggle on" id="btnWarp" onclick="toggleWarp()">시공간 격자</button>
+        <button class="ctrl-toggle" id="btnPreview" onclick="togglePreview()">예측선 OFF</button>
+        <button class="ctrl-toggle on" id="btnAudio" onclick="toggleAudio()">음향 ON</button>
+      </div>
+    </header>
+
+    <!-- 메인 작업 영역 -->
+    <div class="workspace-split" id="workspaceSplit">
+      <!-- 좌측 좌표 플로터 -->
+      <section class="scope-pane" id="scopePane">
+        <div class="canvas-mount" id="canvasMount">
+          <canvas id="spaceCanvas"></canvas>
+
+          <div class="hud-tl">
+            <span id="cursorHud">POS [ 0.0 , 0.0 ]</span>
+            <span>ATTEMPTS: <strong id="attemptHud">0</strong></span>
+          </div>
+
+          <div class="hud-tr" title="좌표평면 배율 조절 (마우스 휠 지원)">
+            <button class="zoom-btn" onclick="adjustZoom(-0.15)">-</button>
+            <button class="zoom-btn" id="zoomReadout" onclick="resetZoom()" title="100% 기본 배율로 복귀">100%</button>
+            <button class="zoom-btn" onclick="adjustZoom(0.15)">+</button>
+            <button class="zoom-btn" onclick="fitTrajectoryView()" title="화면 밖으로 나간 궤적까지 한눈에 보기" style="border-left:1px solid var(--border-hairline); color:var(--amber);">전체궤적</button>
+          </div>
+
+          <div class="hud-bl">
+            <span class="leg"><i class="leg-mark" style="background:#eceef2;"></i>탐사선</span>
+            <span class="leg"><i class="leg-mark" style="background:#10b981; border-radius:50%;"></i>목표 행성</span>
+            <span class="leg"><i class="leg-mark" style="background:#a78bfa; border-radius:50%;"></i>블랙홀 / 중성자별</span>
+            <span class="leg"><i class="leg-mark" style="background:#f59e0b; border-radius:50%;"></i>장애물 행성</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 드래그 크기 조절 핸들 -->
+      <div class="resizer-bar" id="resizerBar" title="좌우로 드래그하여 화면 비율 조절">
+        <div class="resizer-grip"></div>
+      </div>
+
+      <!-- 우측 비행 제어 콘솔 -->
+      <aside class="console-pane" id="consolePane">
+        <div class="module">
+          <div class="module-label">
+            <span>MISSION BRIEFING</span>
+            <span class="tag" id="stageTag">일차함수</span>
+          </div>
+          <div class="mission-name" id="stageTitle">STAGE 01</div>
+          <p class="mission-copy" id="stageDesc"></p>
+        </div>
+
+        <div class="module">
+          <div class="module-label">
+            <span>COORDINATE TELEMETRY</span>
+            <button class="ctrl-toggle" onclick="loadRandomStage()" style="padding:2px 7px; font-size:0.68rem;">랜덤 성계</button>
+          </div>
+          <div class="telemetry-grid">
+            <div class="tele-cell">
+              <small>ORIGIN (출발 좌표)</small>
+              <strong id="originVal" style="color:var(--text-main);">(-7, -2)</strong>
+            </div>
+            <div class="tele-cell">
+              <small>DESTINATION (목표 행성)</small>
+              <strong id="targetVal" style="color:var(--emerald);">(7, 5)</strong>
+            </div>
+          </div>
+        </div>
+
+        <div class="module">
+          <div class="module-label">
+            <span>TRAJECTORY EQUATION INPUT</span>
+          </div>
+
+          <div class="input-terminal">
+            <span class="fn-prompt">y =</span>
+            <input type="text" id="formulaInput" placeholder="예: 1/2x, -1/10(x+7)(x-7), 1/2x^2" autocomplete="off" spellcheck="false" />
+          </div>
+
+          <div class="keycap-row">
+            <button class="keycap" onclick="insertKey('x')">x</button>
+            <button class="keycap" onclick="insertKey('^2')">x²</button>
+            <button class="keycap" onclick="insertKey('^3')">x³</button>
+            <button class="keycap" onclick="insertKey('/')" title="분수 / 나눗셈">/</button>
+            <button class="keycap" onclick="insertKey('()()')">( )( )</button>
+            <button class="keycap" onclick="insertKey('|x|')">|x|</button>
+            <button class="keycap" onclick="insertKey('sqrt()')">√</button>
+            <button class="keycap" onclick="insertKey('sin(x)')">sin</button>
+            <button class="keycap" onclick="insertKey('e^x')">eˣ</button>
+          </div>
+
+          <div class="switch-line">
+            <label for="anchorCheck">
+              <strong>출발점 자동 평행이동</strong>
+              <span id="anchorHint">ON: 입력한 함수 개형 그대로 출발 좌표에서 발사</span>
+            </label>
+            <input type="checkbox" id="anchorCheck" checked onchange="updateAnchorText()" />
+          </div>
+
+          <div class="cmd-row">
+            <button class="cmd-btn cmd-exec" onclick="executeLaunch()">출항 (ENTER)</button>
+            <button class="cmd-btn cmd-sec" onclick="showHint()">힌트</button>
+            <button class="cmd-btn cmd-sec" onclick="clearPaths()">초기화</button>
+          </div>
+
+          <div class="log-output" id="logBox"></div>
+          <button class="cmd-btn cmd-next hidden" id="nextStageBtn" onclick="nextStage()">다음 성계로 이동 ➔</button>
+        </div>
+
+        <div class="module" style="border-bottom:none;">
+          <div class="module-label">
+            <span>FLEXIBLE SYNTAX GUIDE</span>
+          </div>
+          <div class="syntax-table">
+            <div class="syn-item"><span>분수 계수</span><code>1/2x, -1/10x^2</code></div>
+            <div class="syn-item"><span>이차 일반형</span><code>ax^2 + bx + c</code></div>
+            <div class="syn-item"><span>이차 표준형</span><code>a(x - p)^2 + q</code></div>
+            <div class="syn-item"><span>인수분해꼴</span><code>a(x - p)(x - q)</code></div>
+            <div class="syn-item"><span>삼차/절댓값</span><code>X^3, a|x - p|</code></div>
+            <div class="syn-item"><span>지수/삼각</span><code>e^x, sin x</code></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    // ==========================================
+    // 1. 사운드 모듈 (Web Audio API)
+    // ==========================================
+    let audioOn = true;
+    let audioCtx = null;
+
+    function playSound(freq, type = "sine", dur = 0.14, vol = 0.06, endFreq = null) {
+      if (!audioOn) return;
+      try {
+        if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        if (endFreq) osc.frequency.exponentialRampToValueAtTime(endFreq, audioCtx.currentTime + dur);
+        gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + dur);
+      } catch (e) {}
+    }
+
+    function toggleAudio() {
+      audioOn = !audioOn;
+      const btn = document.getElementById("btnAudio");
+      btn.textContent = audioOn ? "음향 ON" : "음향 OFF";
+      btn.classList.toggle("on", audioOn);
+    }
+
+    // ==========================================
+    // 2. 스테이지 정의 (답이 미리 들어있지 않음)
+    // ==========================================
+    const stages = [
+      {
+        id: 1,
+        title: "STAGE 01. 직선 성간 항해",
+        tag: "일차함수",
+        desc: "우주선이 출발 좌표에서 목표 행성까지 직선 항로로 이동합니다. 두 점의 좌표 변화량을 이용해 알맞은 <strong>일차함수</strong>를 분수(예: <code>1/2x</code>) 또는 소수로 입력하세요.",
+        ship: { x: -7, y: -2 },
+        target: { x: 7, y: 5, r: 0.85, name: "KEPLER-22B" },
+        obstacles: [],
+        wells: [],
+        hint: "x좌표가 -7에서 +7까지 14만큼 증가할 때, y좌표는 -2에서 +5까지 7만큼 증가합니다. 기울기 m = Δy / Δx 를 분수 또는 소수로 구해 'mx' 형태로 입력해 보세요."
+      },
+      {
+        id: 2,
+        title: "STAGE 02. 가스 거성 궤도 우회",
+        tag: "이차함수",
+        desc: "직선 경로 중앙에 거대한 행성이 위치해 있습니다. 위로 볼록한 <strong>이차함수 (a < 0)</strong> 곡선(예: <code>-1/10(x+7)(x-7)</code> 또는 <code>-0.1x^2</code>)을 설계해 행성 위를 안전하게 통과하세요.",
+        ship: { x: -7, y: -2 },
+        target: { x: 7, y: -2, r: 0.85, name: "TERRA NOVA" },
+        obstacles: [
+          { x: 0, y: -1.6, r: 2.4, name: "GAS GIANT" }
+        ],
+        wells: [],
+        hint: "출발점(-7, -2)과 목표 행성(7, -2)의 y좌표가 같으므로 a(x+7)(x-7) 또는 ax^2 형태가 유리합니다. 행성 반지름(2.4)보다 높게 지나가도록 음수 계수 a(분수 또는 소수)를 조절해 보세요."
+      },
+      {
+        id: 3,
+        title: "STAGE 03. 중성자별 시공간 왜곡",
+        tag: "약한 중력 굴절",
+        desc: "항로 아래쪽에 고밀도 <strong>중성자별</strong>이 있어 주변 시공간이 아래로 휘어져 있습니다. 직선으로 출발하면 중력에 이끌려 아래로 빗나가므로, 위쪽으로 휘어지는 곡선으로 보정하세요.",
+        ship: { x: -7, y: 0 },
+        target: { x: 7, y: 0, r: 0.85, name: "AURELIA" },
+        obstacles: [],
+        wells: [
+          { x: 0, y: -2.6, horizonR: 0.85, strength: 4.2, type: "neutron", name: "NEUTRON STAR" }
+        ],
+        hint: "중성자별이 아래쪽(y = -2.6)에서 우주선을 끌어당깁니다. 위로 볼록한 완만한 이차함수(a < 0, 절댓값이 작은 분수/소수)를 입력해 중력 굴절을 상쇄해 보세요."
+      },
+      {
+        id: 4,
+        title: "STAGE 04. 블랙홀 사건의 지평선",
+        tag: "강한 중력 우회",
+        desc: "강력한 <strong>블랙홀</strong>이 시공간을 깊게 함몰시키고 있습니다. 붉은 경계선(사건의 지평선)에 닿으면 탈출할 수 없습니다. 충분히 큰 곡률로 멀리 우회하세요.",
+        ship: { x: -7, y: -2 },
+        target: { x: 7, y: -2, r: 0.85, name: "ELYSIUM" },
+        obstacles: [],
+        wells: [
+          { x: 0, y: -1.8, horizonR: 1.25, strength: 7.5, type: "blackhole", name: "BLACK HOLE α" }
+        ],
+        hint: "블랙홀 중심 (0, -1.8) 근처는 중력이 매우 강합니다. 이차함수나 절댓값 함수(-a|x|)를 이용해 y = +3 이상 높은 고도로 크게 우회해 보세요."
+      },
+      {
+        id: 5,
+        title: "STAGE 05. 쌍성 블랙홀 중력 협곡",
+        tag: "삼차함수 / 변곡",
+        desc: "위아래 두 블랙홀이 시공간을 반대 방향으로 비틀고 있습니다. 두 사건의 지평선 사이 S자 통로를 통과할 수 있는 함수를 설계하세요.",
+        ship: { x: -8, y: -2.5 },
+        target: { x: 8, y: 2.5, r: 0.85, name: "NEW EDEN" },
+        obstacles: [],
+        wells: [
+          { x: -1.8, y: 2.3, horizonR: 1.15, strength: 6.5, type: "blackhole", name: "BH-NORTH" },
+          { x: 1.8, y: -2.3, horizonR: 1.15, strength: 6.5, type: "blackhole", name: "BH-SOUTH" }
+        ],
+        hint: "음수 구간에서는 아래로, 양수 구간에서는 위로 휘어지는 원점 대칭 삼차함수(ax^3 + bx 또는 ax(x-p)(x+p))를 사용하면 두 블랙홀 사이를 매끄럽게 통과할 수 있습니다."
+      },
+      {
+        id: 6,
+        title: "STAGE 06. 블랙홀 중력 슬링샷",
+        tag: "중력 굴절 활용",
+        desc: "목표 행성이 거대 암석 행성 뒤에 가려져 있습니다. 위쪽 <strong>렌즈 블랙홀</strong>의 인력이 우주선 궤적을 아래로 꺾어주는 현상을 이용해 행성 뒤편으로 진입하세요.",
+        ship: { x: -8, y: 1 },
+        target: { x: 7.5, y: -2.5, r: 0.9, name: "OMEGA-IV" },
+        obstacles: [
+          { x: 1.5, y: -2.8, r: 2.2, name: "BARRIER PLANET" }
+        ],
+        wells: [
+          { x: 0.5, y: 1.8, horizonR: 1.05, strength: 7.2, type: "blackhole", name: "LENS BH" }
+        ],
+        hint: "블랙홀 (0.5, 1.8)의 사건의 지평선 바깥쪽 위를 스치듯 지나가는 완만한 위로 볼록 이차함수를 입력하면, 중력이 궤적을 아래쪽으로 꺾어 목표 행성으로 안내합니다."
+      },
+      {
+        id: 7,
+        title: "STAGE 07. 고밀도 성단 3중 중력장",
+        tag: "다중 천체 보정",
+        desc: "펄서 두 개와 중앙 블랙홀이 얽혀 시공간이 물결치고 있습니다. 첫 시도의 항적 굴절 방향을 관찰한 뒤 함수의 기울기와 곡률을 정밀하게 수정하세요.",
+        ship: { x: -8, y: 2 },
+        target: { x: 8, y: -2, r: 0.85, name: "SIRIUS-C" },
+        obstacles: [],
+        wells: [
+          { x: -3, y: -0.8, horizonR: 0.9, strength: 5.0, type: "neutron", name: "PULSAR-A" },
+          { x: 0, y: 2.6, horizonR: 1.1, strength: 6.8, type: "blackhole", name: "BH-CORE" },
+          { x: 3.5, y: -1.8, horizonR: 0.9, strength: 5.0, type: "neutron", name: "PULSAR-B" }
+        ],
+        hint: "출발점(-8, 2)과 도착점(8, -2)을 잇는 기본 기울기(-1/4 또는 -0.25)를 기준으로, 중앙 블랙홀 아래쪽 안전 통로를 지나도록 미세 조정해 보세요."
+      },
+      {
+        id: 8,
+        title: "STAGE 08. 은하 중심 초거대 블랙홀",
+        tag: "최종 항법 미션",
+        desc: "초거대 블랙홀과 두 개의 외곽 행성이 동시에 배치된 최종 성계입니다. 시공간 왜곡과 장애물을 모두 돌파해 마지막 행성에 착륙하세요.",
+        ship: { x: -8, y: -3 },
+        target: { x: 8, y: 3, r: 0.9, name: "ARCADIA" },
+        obstacles: [
+          { x: -3.5, y: 1.6, r: 1.8, name: "OUTER-1" },
+          { x: 4.0, y: -2.0, r: 1.9, name: "INNER-2" }
+        ],
+        wells: [
+          { x: 0, y: 0, horizonR: 1.25, strength: 8.5, type: "blackhole", name: "SGR A*" }
+        ],
+        hint: "중앙 (0, 0)의 사건의 지평선을 피하면서 왼쪽 행성 아래, 오른쪽 행성 위를 지나려면 삼차함수(ax^3 + bx) 조합이 가장 이상적입니다."
+      }
+    ];
+
+    // ==========================================
+    // 3. 상태 및 뷰포트 스케일/줌 변수
+    // ==========================================
+    const canvas = document.getElementById("spaceCanvas");
+    const ctx = canvas.getContext("2d");
+    const canvasMount = document.getElementById("canvasMount");
+
+    const BASE_X_HALF = 10;
+    const BASE_Y_HALF = 6;
+    let zoomLevel = 1.0;
+
+    let currentIdx = 0;
+    let currentStage = null;
+    let clearedSet = new Set();
+
+    let showWarp = true;
+    let showPreview = false;
+    let attempts = 0;
+
+    let flightHistory = [];
+    let activeFlight = null;
+    let sparks = [];
+    let tick = 0;
+
+    const starField = Array.from({ length: 120 }, () => ({
+      nx: Math.random(),
+      ny: Math.random(),
+      r: Math.random() * 1.3 + 0.3,
+      a: Math.random() * 0.55 + 0.15
+    }));
+
+    // ==========================================
+    // 4. 반응형 캔버스 리사이즈 & 화면 크기 조절
+    // ==========================================
+    let viewW = 1000;
+    let viewH = 600;
+
+    function syncCanvasSize() {
+      const rect = canvasMount.getBoundingClientRect();
+      if (rect.width < 10 || rect.height < 10) return;
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      viewW = rect.width;
+      viewH = rect.height;
+      canvas.width = Math.round(viewW * dpr);
+      canvas.height = Math.round(viewH * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      syncCanvasSize();
+    });
+    resizeObserver.observe(canvasMount);
+
+    function setUiScale(scale, activeBtnId) {
+      document.documentElement.style.setProperty("--ui-scale", scale);
+      ["scale85", "scale100", "scale115"].forEach(id => {
+        document.getElementById(id).classList.toggle("active", id === activeBtnId);
+      });
+      setTimeout(syncCanvasSize, 20);
+    }
+
+    let isFocusView = false;
+    function toggleFocusView() {
+      isFocusView = !isFocusView;
+      const consolePane = document.getElementById("consolePane");
+      const resizer = document.getElementById("resizerBar");
+      const btn = document.getElementById("btnFocusView");
+      consolePane.classList.toggle("collapsed", isFocusView);
+      resizer.classList.toggle("hidden", isFocusView);
+      btn.classList.toggle("on", isFocusView);
+      btn.textContent = isFocusView ? "콘솔 복귀" : "레이더 확장";
+      setTimeout(syncCanvasSize, 20);
+    }
+
+    function setZoom(val) {
+      zoomLevel = Math.min(2.0, Math.max(0.15, Number(val.toFixed(2))));
+      document.getElementById("zoomReadout").textContent = `${Math.round(zoomLevel * 100)}%`;
+    }
+
+    function adjustZoom(delta) {
+      setZoom(zoomLevel + delta);
+    }
+
+    function resetZoom() {
+      setZoom(1.0);
+    }
+
+    function fitTrajectoryView() {
+      let maxAbsX = BASE_X_HALF;
+      let maxAbsY = BASE_Y_HALF;
+
+      if (currentStage) {
+        maxAbsX = Math.max(maxAbsX, Math.abs(currentStage.ship.x) + 2, Math.abs(currentStage.target.x) + 2);
+        maxAbsY = Math.max(maxAbsY, Math.abs(currentStage.ship.y) + 2, Math.abs(currentStage.target.y) + 2);
+      }
+
+      const allSets = [];
+      if (activeFlight && activeFlight.pts) allSets.push(activeFlight.pts);
+      flightHistory.forEach(item => {
+        if (item.pts) allSets.push(item.pts);
+      });
+
+      const raw = document.getElementById("formulaInput").value;
+      const parsed = parseMathExpression(raw);
+      if (!parsed.error) {
+        const sim = computeTrajectory(parsed.fn);
+        if (!sim.error && sim.bentPts) allSets.push(sim.bentPts);
+      }
+
+      allSets.forEach(pts => {
+        pts.forEach(pt => {
+          if (Number.isFinite(pt.x) && Math.abs(pt.x) <= 25) {
+            maxAbsX = Math.max(maxAbsX, Math.abs(pt.x) + 1.2);
+          }
+          if (Number.isFinite(pt.y) && Math.abs(pt.y) <= 200) {
+            maxAbsY = Math.max(maxAbsY, Math.abs(pt.y) + 1.5);
+          }
+        });
+      });
+
+      const neededZoomX = BASE_X_HALF / maxAbsX;
+      const neededZoomY = BASE_Y_HALF / maxAbsY;
+      setZoom(Math.min(1.0, neededZoomX, neededZoomY));
+    }
+
+    canvas.addEventListener("wheel", (e) => {
+      e.preventDefault();
+      const step = e.deltaY > 0 ? -0.1 : 0.1;
+      adjustZoom(step);
+    }, { passive: false });
+
+    (function initResizer() {
+      const bar = document.getElementById("resizerBar");
+      const consolePane = document.getElementById("consolePane");
+      const split = document.getElementById("workspaceSplit");
+      let dragging = false;
+
+      bar.addEventListener("mousedown", (e) => {
+        dragging = true;
+        bar.classList.add("dragging");
+        e.preventDefault();
+      });
+
+      window.addEventListener("mousemove", (e) => {
+        if (!dragging) return;
+        const rect = split.getBoundingClientRect();
+        const newConsoleW = rect.right - e.clientX;
+        const clamped = Math.max(300, Math.min(640, newConsoleW));
+        consolePane.style.width = `${clamped}px`;
+        syncCanvasSize();
+      });
+
+      window.addEventListener("mouseup", () => {
+        if (dragging) {
+          dragging = false;
+          bar.classList.remove("dragging");
+        }
+      });
+    })();
+
+    function getBounds() {
+      const aspect = viewW / Math.max(viewH, 1);
+      const targetAspect = BASE_X_HALF / BASE_Y_HALF;
+      let xHalf = BASE_X_HALF / zoomLevel;
+      let yHalf = BASE_Y_HALF / zoomLevel;
+
+      if (aspect > targetAspect) {
+        xHalf = yHalf * aspect;
+      } else {
+        yHalf = xHalf / aspect;
+      }
+      return { xMin: -xHalf, xMax: xHalf, yMin: -yHalf, yMax: yHalf };
+    }
+
+    function toPxX(lx) {
+      const b = getBounds();
+      const px = ((lx - b.xMin) / (b.xMax - b.xMin)) * viewW;
+      return Math.max(-20000, Math.min(viewW + 20000, px));
+    }
+    function toPxY(ly) {
+      const b = getBounds();
+      const py = ((b.yMax - ly) / (b.yMax - b.yMin)) * viewH;
+      return Math.max(-20000, Math.min(viewH + 20000, py));
+    }
+    function toLogX(px) {
+      const b = getBounds();
+      return b.xMin + (px / viewW) * (b.xMax - b.xMin);
+    }
+    function toLogY(py) {
+      const b = getBounds();
+      return b.yMax - (py / viewH) * (b.yMax - b.yMin);
+    }
+    function unitPx() {
+      const b = getBounds();
+      return viewW / (b.xMax - b.xMin);
+    }
+
+    // ==========================================
+    // 5. 균형 괄호 기반 거듭제곱 변환 헬퍼
+    //    - 중첩 괄호: (2(x-1))^2, (1/2(x-1))^2, e^(-x^2), 2^3^2 모두 지원
+    // ==========================================
+    function convertPowers(expr) {
+      const fnNames = ["exp", "abs", "sqrt", "sin", "cos", "tan", "log", "ln"];
+      let guard = 0;
+
+      while (expr.includes("^") && guard < 30) {
+        guard++;
+        const idx = expr.lastIndexOf("^");
+        if (idx <= 0 || idx >= expr.length - 1) return null;
+
+        // 1) 좌측 피연산자(base) 범위 탐색
+        let leftStart = idx - 1;
+        const chBefore = expr[leftStart];
+
+        if (chBefore === ")") {
+          let depth = 1;
+          leftStart--;
+          while (leftStart >= 0 && depth > 0) {
+            if (expr[leftStart] === ")") depth++;
+            else if (expr[leftStart] === "(") depth--;
+            leftStart--;
+          }
+          if (depth !== 0) return null;
+          leftStart++; // '(' 위치로 보정
+
+          // 괄호 바로 앞에 함수 이름(sin, cos, sqrt 등)이 붙어 있다면 함께 포함
+          for (const fn of fnNames) {
+            if (leftStart >= fn.length && expr.slice(leftStart - fn.length, leftStart) === fn) {
+              const prevCh = expr[leftStart - fn.length - 1];
+              if (!prevCh || !/[a-z_]/.test(prevCh)) {
+                leftStart -= fn.length;
+                break;
+              }
+            }
+          }
+        } else if (/[0-9.]/.test(chBefore)) {
+          while (leftStart > 0 && /[0-9.]/.test(expr[leftStart - 1])) {
+            leftStart--;
+          }
+        } else if (/[a-z_]/.test(chBefore)) {
+          while (leftStart > 0 && /[a-z0-9_]/.test(expr[leftStart - 1])) {
+            leftStart--;
+          }
+        } else {
+          return null;
+        }
+
+        // 2) 우측 피연산자(exponent) 범위 탐색
+        let rightEnd = idx + 1;
+        while (rightEnd < expr.length && (expr[rightEnd] === "+" || expr[rightEnd] === "-")) {
+          rightEnd++;
+        }
+        if (rightEnd >= expr.length) return null;
+
+        const chAfter = expr[rightEnd];
+        if (chAfter === "(") {
+          let depth = 1;
+          rightEnd++;
+          while (rightEnd < expr.length && depth > 0) {
+            if (expr[rightEnd] === "(") depth++;
+            else if (expr[rightEnd] === ")") depth--;
+            rightEnd++;
+          }
+          if (depth !== 0) return null;
+        } else if (/[0-9.]/.test(chAfter)) {
+          while (rightEnd < expr.length && /[0-9.]/.test(expr[rightEnd])) {
+            rightEnd++;
+          }
+        } else if (/[a-z_]/.test(chAfter)) {
+          while (rightEnd < expr.length && /[a-z0-9_]/.test(expr[rightEnd])) {
+            rightEnd++;
+          }
+          // 함수 호출 형태(예: sin(x))인 경우 괄호까지 포함
+          if (rightEnd < expr.length && expr[rightEnd] === "(") {
+            let depth = 1;
+            rightEnd++;
+            while (rightEnd < expr.length && depth > 0) {
+              if (expr[rightEnd] === "(") depth++;
+              else if (expr[rightEnd] === ")") depth--;
+              rightEnd++;
+            }
+            if (depth !== 0) return null;
+          }
+        } else {
+          return null;
+        }
+
+        const base = expr.slice(leftStart, idx);
+        const exponent = expr.slice(idx + 1, rightEnd);
+        expr = expr.slice(0, leftStart) + `Math.pow(${base},${exponent})` + expr.slice(rightEnd);
+      }
+
+      return expr;
+    }
+
+    // ==========================================
+    // 6. 자유로운 수학 수식 파서 & 평가기
+    // ==========================================
+    function parseMathExpression(raw) {
+      if (!raw || !raw.trim()) {
+        return { error: "함수식을 입력해 주세요. (예: 1/2x, -1/10(x+7)(x-7), 1/2x^2)" };
+      }
+
+      let expr = raw.trim();
+
+      // 1) 좌변 y =, f(x) =, g(x) = 등 제거
+      expr = expr.replace(/^(?:y|f|g|h)(?:\s*\(\s*x\s*\))?\s*=\s*/i, "");
+
+      // 2) 전각 문자, 대괄호/중괄호, 유니코드 분수 및 연산자 정규화
+      const unicodeFractions = {
+        "½": "(1/2)", "⅓": "(1/3)", "⅔": "(2/3)", "¼": "(1/4)", "¾": "(3/4)",
+        "⅕": "(1/5)", "⅖": "(2/5)", "⅗": "(3/5)", "⅘": "(4/5)",
+        "⅙": "(1/6)", "⅚": "(5/6)", "⅛": "(1/8)", "⅜": "(3/8)", "⅝": "(5/8)", "⅞": "(7/8)"
+      };
+      expr = expr.replace(/[½⅓⅔¼¾⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞]/g, (ch) => unicodeFractions[ch] || ch);
+
+      expr = expr
+        .replace(/[（\[{［｛]/g, "(")
+        .replace(/[）\]}］｝]/g, ")")
+        .replace(/[×·∙＊]/g, "*")
+        .replace(/[÷／⁄]/g, "/")
+        .replace(/[−–—－]/g, "-")
+        .replace(/＋/g, "+")
+        .replace(/\*\*/g, "^");
+
+      // 3) 유니코드 위첨자 (x², X³, x⁻² 등) -> ^2, ^3, ^-2 변환
+      const supMap = {
+        "⁰": "0", "¹": "1", "²": "2", "³": "3", "⁴": "4",
+        "⁵": "5", "⁶": "6", "⁷": "7", "⁸": "8", "⁹": "9", "⁻": "-"
+      };
+      expr = expr.replace(/[⁻⁰¹²³⁴⁵⁶⁷⁸⁹]+/g, (m) => {
+        return "^" + m.split("").map((ch) => supMap[ch]).join("");
+      });
+
+      // 4) 전체 소문자 통일
+      expr = expr.toLowerCase();
+
+      // 5) 공백 포함 간편 함수 표기 (예: "sin x", "sqrt x", "abs x")
+      expr = expr.replace(/\b(sin|cos|tan|sqrt|abs|log|ln|exp)\s+([a-z0-9.]+)/g, "$1($2)");
+
+      // 6) 루트 기호 √ 처리
+      expr = expr.replace(/√\s*\(/g, "sqrt(");
+      expr = expr.replace(/√\s*([a-z0-9.]+)/g, "sqrt($1)");
+
+      // 7) 모든 공백 제거
+      expr = expr.replace(/\s+/g, "");
+
+      // 8) 삼각함수 거듭제곱 간편 표기 (예: sin^2(x) -> (sin(x))^2)
+      expr = expr.replace(/\b(sin|cos|tan)\^(\d+)\(([^()]+)\)/g, "($1($3))^$2");
+
+      // 9) 절댓값 |...| -> abs(...) 변환
+      let prev;
+      let absGuard = 0;
+      do {
+        prev = expr;
+        expr = expr.replace(/\|([^|]+)\|/g, "abs($1)");
+        absGuard++;
+      } while (expr !== prev && absGuard < 12);
+
+      if (expr.includes("|")) {
+        return { error: "절댓값 기호 '|'의 짝이 맞지 않습니다." };
+      }
+
+      // 10) 자유로운 암묵적 곱셈 처리
+      const fnOrVar = "(?:exp|abs|sqrt|sin|cos|tan|log|ln|pi|e(?!xp)|x|\\()";
+      let multPrev;
+      let multGuard = 0;
+      do {
+        multPrev = expr;
+        expr = expr.replace(new RegExp("(\\d)(" + fnOrVar + ")", "g"), "$1*$2");
+        expr = expr.replace(new RegExp("(\\))(\\d|" + fnOrVar + ")", "g"), "$1*$2");
+        expr = expr.replace(new RegExp("\\bx(\\d|" + fnOrVar + ")", "g"), "x*$1");
+        expr = expr.replace(new RegExp("\\b(pi|e(?!xp))(\\d|" + fnOrVar + ")", "g"), "$1*$2");
+        multGuard++;
+      } while (expr !== multPrev && multGuard < 12);
+
+      // 11) 균형 괄호 기반 거듭제곱(^) 변환
+      const powConverted = convertPowers(expr);
+      if (powConverted === null || powConverted.includes("^")) {
+        return { error: "거듭제곱(^) 표기법을 확인해 주세요. (예: x^2, (x-1)^2, 1/2x^2)" };
+      }
+      expr = powConverted;
+
+      // 12) 상수 및 표준 수학 함수를 자바스크립트 Math 객체로 치환
+      expr = expr
+        .replace(/\bpi\b/g, "Math.PI")
+        .replace(/\be\b/g, "Math.E")
+        .replace(/\b(exp|abs|sqrt|sin|cos|tan|ln)\(/g, (_, fnName) => {
+          return fnName === "ln" ? "Math.log(" : `Math.${fnName}(`;
+        })
+        .replace(/\blog\(/g, "Math.log10(");
+
+      // 13) 허용되지 않은 식별자/기호 검사
+      const leftovers = expr
+        .replace(/Math\.(pow|exp|abs|sqrt|sin|cos|tan|log10|log|PI|E)/g, "")
+        .replace(/\bx\b/g, "")
+        .replace(/[0-9+\-*/().,\s]/g, "");
+
+      if (leftovers.length > 0) {
+        return { error: `인식할 수 없는 문자나 기호가 포함되어 있습니다: "${leftovers}"` };
+      }
+
+      try {
+        const fn = new Function("x", `"use strict"; return (${expr});`);
+        const probe = fn(1);
+        if (typeof probe !== "number") {
+          return { error: "수식 계산 결과가 올바른 숫자가 아닙니다." };
+        }
+        return { fn };
+      } catch (e) {
+        return { error: "수식 문법 오류입니다. 괄호의 짝이나 연산 기호를 확인해 주세요." };
+      }
+    }
+
+    // ==========================================
+    // 7. 시공간 중력 굴절 궤적 시뮬레이션
+    //    - 함수가 화면 위/아래 밖으로 나가더라도 중단되지 않고 끝까지 궤적을 계산
+    //    - 화면 밖으로 나갔다 다시 화면 안으로 진입해 목표 행성에 도달하는 곡선 완벽 지원
+    // ==========================================
+    function computeTrajectory(rawFn) {
+      const autoAnchor = document.getElementById("anchorCheck").checked;
+      const s = currentStage.ship;
+      const t = currentStage.target;
+
+      const y0 = rawFn(s.x);
+      if (!Number.isFinite(y0)) {
+        return { error: `출발 좌표 x = ${s.x}에서 함수값이 정의되지 않습니다.` };
+      }
+
+      let baseFn;
+      if (autoAnchor) {
+        baseFn = (x) => rawFn(x) - y0 + s.y;
+      } else {
+        if (Math.abs(y0 - s.y) > 0.35) {
+          return {
+            error: `고정 좌표 모드에서는 그래프가 출발점 (${s.x}, ${s.y})를 직접 지나야 합니다. (현재 f(${s.x}) = ${y0.toFixed(2)})`
+          };
+        }
+        baseFn = rawFn;
+      }
+
+      const dir = t.x >= s.x ? 1 : -1;
+      const dx = 0.04 * dir;
+      const purePts = [{ x: s.x, y: s.y }];
+      const bentPts = [{ x: s.x, y: s.y }];
+
+      let cx = s.x;
+      let cy = s.y;
+      let gravVy = 0;
+
+      const xLimit = Math.max(18, Math.abs(t.x) + 10);
+      const maxSteps = Math.max(700, Math.ceil((Math.abs(t.x - s.x) + 12) / Math.abs(dx)));
+
+      let outcome = {
+        status: "miss",
+        msg: "목표 행성을 지나쳐 성계 외곽으로 벗어났습니다. 계수를 다시 조절해 보세요."
+      };
+
+      for (let step = 1; step <= maxSteps; step++) {
+        const nx = s.x + step * dx;
+        const yPrev = baseFn(cx);
+        const yNext = baseFn(nx);
+
+        if (!Number.isFinite(yNext)) {
+          outcome = {
+            status: "miss",
+            msg: `x = ${nx.toFixed(2)} 지점에서 함수값이 정의되지 않거나 무한대로 발산해 항로가 중단되었습니다.`
+          };
+          break;
+        }
+
+        purePts.push({ x: nx, y: yNext });
+        const dyInput = yNext - yPrev;
+
+        let ayGrav = 0;
+        for (const w of currentStage.wells) {
+          const rx = cx - w.x;
+          const ry = cy - w.y;
+          const dist = Math.hypot(rx, ry);
+          ayGrav += -(w.strength * ry) / Math.pow(dist * dist + 0.95, 1.45);
+        }
+
+        gravVy += ayGrav * Math.abs(dx);
+        const ny = cy + dyInput + gravVy * Math.abs(dx);
+        bentPts.push({ x: nx, y: ny });
+
+        // 목표 행성 도착 판정
+        if (Math.hypot(nx - t.x, ny - t.y) <= t.r) {
+          bentPts.push({ x: t.x, y: t.y });
+          outcome = { status: "arrived", pos: { x: t.x, y: t.y } };
+          break;
+        }
+
+        // 블랙홀 / 중성자별 사건의 지평선 포획 판정
+        let trapped = null;
+        for (const w of currentStage.wells) {
+          if (Math.hypot(nx - w.x, ny - w.y) <= w.horizonR) {
+            trapped = w;
+            break;
+          }
+        }
+        if (trapped) {
+          const a0 = Math.atan2(ny - trapped.y, nx - trapped.x);
+          const r0 = Math.hypot(nx - trapped.x, ny - trapped.y);
+          for (let k = 1; k <= 18; k++) {
+            const frac = 1 - k / 18;
+            const ang = a0 + k * 0.42;
+            bentPts.push({
+              x: trapped.x + r0 * frac * Math.cos(ang),
+              y: trapped.y + r0 * frac * Math.sin(ang)
+            });
+          }
+          outcome = {
+            status: "sucked",
+            pos: { x: trapped.x, y: trapped.y },
+            msg: `'${trapped.name}'의 사건의 지평선 내부로 포획되었습니다. 더 먼 궤도로 우회하세요.`
+          };
+          break;
+        }
+
+        // 장애물 행성 충돌 판정
+        let hitPlanet = null;
+        for (const obs of currentStage.obstacles) {
+          if (Math.hypot(nx - obs.x, ny - obs.y) <= obs.r) {
+            hitPlanet = obs;
+            break;
+          }
+        }
+        if (hitPlanet) {
+          outcome = {
+            status: "crash",
+            pos: { x: nx, y: ny },
+            msg: `'${hitPlanet.name}' 대기권과 충돌했습니다. 행성을 비껴가는 곡선을 설계하세요.`
+          };
+          break;
+        }
+
+        // 수치 오버플로우만 방지하고, y가 화면 위/아래 밖으로 나가더라도 x가 성계를 벗어날 때까지 끝까지 추적
+        if (Math.abs(ny) > 1e6) {
+          outcome = {
+            status: "miss",
+            msg: "함수값이 너무 크게 발산하여 탐사선이 성계 외곽으로 이탈했습니다."
+          };
+          break;
+        }
+
+        if (Math.abs(nx) > xLimit) {
+          outcome = {
+            status: "miss",
+            msg: "목표 행성을 지나쳐 성계 외곽으로 벗어났습니다. 계수를 다시 조절해 보세요."
+          };
+          break;
+        }
+
+        cx = nx;
+        cy = ny;
+      }
+
+      return { purePts, bentPts, outcome };
+    }
+
+    // ==========================================
+    // 8. 스테이지 & UI 제어
+    // ==========================================
+    function renderStageTabs() {
+      const strip = document.getElementById("stageStrip");
+      strip.innerHTML = "";
+      stages.forEach((st, idx) => {
+        const btn = document.createElement("button");
+        btn.className = "st-key" +
+          (currentStage && currentStage.id === st.id ? " active" : "") +
+          (clearedSet.has(st.id) ? " cleared" : "");
+        btn.textContent = String(st.id).padStart(2, "0");
+        btn.title = st.title;
+        btn.onclick = () => loadStage(idx);
+        strip.appendChild(btn);
+      });
+    }
+
+    function loadStage(idx) {
+      currentIdx = idx;
+      currentStage = JSON.parse(JSON.stringify(stages[idx]));
+      initMission();
+    }
+
+    function loadRandomStage() {
+      const sx = -8;
+      const sy = Math.floor(Math.random() * 7) - 3;
+      const tx = 8;
+      const ty = Math.floor(Math.random() * 7) - 3;
+      const wx = Number(((Math.random() * 4) - 2).toFixed(1));
+      const wy = Number(((Math.random() * 4) - 2).toFixed(1));
+
+      currentStage = {
+        id: "RND",
+        title: "RANDOM. 미지의 블랙홀 성계",
+        tag: "자유 항법",
+        desc: "무작위 좌표에 블랙홀이 생성되었습니다. 격자 왜곡을 관찰하며 목표 행성까지 도달하는 함수를 직접 찾아내세요.",
+        ship: { x: sx, y: sy },
+        target: { x: tx, y: ty, r: 0.9, name: "EXOPLANET-X" },
+        obstacles: [],
+        wells: [
+          { x: wx, y: wy, horizonR: 1.15, strength: 7.2, type: "blackhole", name: "UNKNOWN BH" }
+        ],
+        hint: `블랙홀이 (${wx}, ${wy})에 위치합니다. 블랙홀의 반대 방향으로 휘어지는 이차함수나 절댓값 함수를 설계해 보세요.`
+      };
+      initMission();
+      showLog("info", "새로운 랜덤 성계 좌표가 수신되었습니다.");
+    }
+
+    function initMission() {
+      activeFlight = null;
+      flightHistory = [];
+      sparks = [];
+      attempts = 0;
+
+      document.getElementById("attemptHud").textContent = "0";
+      document.getElementById("stageTitle").textContent = currentStage.title;
+      document.getElementById("stageTag").textContent = currentStage.tag;
+      document.getElementById("stageDesc").innerHTML = currentStage.desc;
+      document.getElementById("originVal").textContent = `(${currentStage.ship.x}, ${currentStage.ship.y})`;
+      document.getElementById("targetVal").textContent = `(${currentStage.target.x}, ${currentStage.target.y})`;
+
+      document.getElementById("formulaInput").value = "";
+      document.getElementById("nextStageBtn").classList.add("hidden");
+      hideLog();
+      renderStageTabs();
+    }
+
+    function toggleWarp() {
+      showWarp = !showWarp;
+      const btn = document.getElementById("btnWarp");
+      btn.classList.toggle("on", showWarp);
+    }
+
+    function togglePreview() {
+      showPreview = !showPreview;
+      const btn = document.getElementById("btnPreview");
+      btn.classList.toggle("on", showPreview);
+      btn.textContent = showPreview ? "예측선 ON" : "예측선 OFF";
+    }
+
+    function updateAnchorText() {
+      const on = document.getElementById("anchorCheck").checked;
+      document.getElementById("anchorHint").textContent = on
+        ? "ON: 입력한 함수 개형 그대로 출발 좌표에서 발사"
+        : "OFF: 그래프가 출발 좌표 (x₀, y₀)를 직접 지나야 출항";
+    }
+
+    function insertKey(tok) {
+      const inp = document.getElementById("formulaInput");
+      const s = inp.selectionStart ?? inp.value.length;
+      const e = inp.selectionEnd ?? inp.value.length;
+      const before = inp.value.slice(0, s);
+
+      let actualTok = tok;
+      if ((tok === "^2" || tok === "^3") && !/[xX0-9)]$/.test(before.trim())) {
+        actualTok = "x" + tok;
+      }
+
+      inp.value = before + actualTok + inp.value.slice(e);
+      inp.focus();
+      if (actualTok === "()()") {
+        inp.setSelectionRange(s + 1, s + 1);
+      } else if (actualTok.endsWith("()")) {
+        inp.setSelectionRange(s + actualTok.length - 1, s + actualTok.length - 1);
+      } else {
+        inp.setSelectionRange(s + actualTok.length, s + actualTok.length);
+      }
+    }
+
+    function clearPaths() {
+      flightHistory = [];
+      activeFlight = null;
+      hideLog();
+    }
+
+    function showHint() {
+      playSound(440, "sine", 0.1, 0.05);
+      showLog("hint", `<strong>[항법 조언]</strong> ${currentStage.hint}`);
+    }
+
+    function showLog(cls, html) {
+      const box = document.getElementById("logBox");
+      box.className = `log-output show ${cls}`;
+      box.innerHTML = html;
+    }
+
+    function hideLog() {
+      const box = document.getElementById("logBox");
+      box.className = "log-output";
+      box.innerHTML = "";
+    }
+
+    function nextStage() {
+      if (currentIdx < stages.length - 1) {
+        loadStage(currentIdx + 1);
+      } else {
+        loadRandomStage();
+      }
+    }
+
+    document.getElementById("formulaInput").addEventListener("keydown", (e) => {
+      if (e.key === "Enter") executeLaunch();
+    });
+
+    canvas.addEventListener("mousemove", (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const px = e.clientX - rect.left;
+      const py = e.clientY - rect.top;
+      document.getElementById("cursorHud").textContent =
+        `POS [ ${toLogX(px).toFixed(1)} , ${toLogY(py).toFixed(1)} ]`;
+    });
+
+    // ==========================================
+    // 9. 출항 실행 & 파티클
+    // ==========================================
+    function executeLaunch() {
+      if (activeFlight && activeFlight.running) return;
+
+      const raw = document.getElementById("formulaInput").value;
+      const parsed = parseMathExpression(raw);
+      if (parsed.error) {
+        playSound(160, "sawtooth", 0.18, 0.06);
+        showLog("err", parsed.error);
+        return;
+      }
+
+      const sim = computeTrajectory(parsed.fn);
+      if (sim.error) {
+        playSound(160, "sawtooth", 0.18, 0.06);
+        showLog("err", sim.error);
+        return;
+      }
+
+      attempts++;
+      document.getElementById("attemptHud").textContent = attempts;
+      hideLog();
+      playSound(300, "triangle", 0.25, 0.05, 580);
+
+      // 포인트 수에 상관없이 일정한 시각적 속도(약 1.3~1.8초)로 비행하도록 스텝 속도 계산
+      const speedPerFrame = Math.max(4, Math.ceil(sim.bentPts.length / 95));
+
+      activeFlight = {
+        running: true,
+        pts: sim.bentPts,
+        idx: 1,
+        speed: speedPerFrame,
+        outcome: sim.outcome
+      };
+    }
+
+    function emitSparks(lx, ly, color, count = 32) {
+      const cx = toPxX(lx);
+      const cy = toPxY(ly);
+      for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2;
+        const v = Math.random() * 3.8 + 0.7;
+        sparks.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, life: 1, color });
+      }
+    }
+
+    // ==========================================
+    // 10. 정밀 플로터 렌더링
+    // ==========================================
+    function warpCoord(lx, ly) {
+      if (!showWarp || !currentStage || currentStage.wells.length === 0) {
+        return { x: lx, y: ly };
+      }
+      let wx = lx;
+      let wy = ly;
+      for (const w of currentStage.wells) {
+        const dx = w.x - lx;
+        const dy = w.y - ly;
+        const d = Math.hypot(dx, dy);
+        const pull = Math.min((w.strength * 0.16) / (d * d + 1.4), 0.65);
+        wx += dx * pull;
+        wy += dy * pull;
+      }
+      return { x: wx, y: wy };
+    }
+
+    function drawPlotterGrid() {
+      ctx.fillStyle = "#07080b";
+      ctx.fillRect(0, 0, viewW, viewH);
+
+      starField.forEach(s => {
+        ctx.fillStyle = `rgba(236, 238, 242, ${s.a})`;
+        ctx.fillRect(s.nx * viewW, s.ny * viewH, s.r, s.r);
+      });
+
+      const b = getBounds();
+      const xStart = Math.floor(b.xMin);
+      const xEnd = Math.ceil(b.xMax);
+      const yStart = Math.floor(b.yMin);
+      const yEnd = Math.ceil(b.yMax);
+
+      // 줌 아웃 시 눈금 간격 자동 조정
+      const span = Math.max(xEnd - xStart, yEnd - yStart);
+      const labelStep = span > 60 ? 10 : span > 32 ? 5 : 2;
+      const gridStep = span > 80 ? 5 : 1;
+
+      for (let x = Math.ceil(xStart / gridStep) * gridStep; x <= xEnd; x += gridStep) {
+        const isAxis = x === 0;
+        ctx.strokeStyle = isAxis ? "rgba(245, 158, 11, 0.42)" : "rgba(255, 255, 255, 0.06)";
+        ctx.lineWidth = isAxis ? 1.3 : 1;
+        ctx.beginPath();
+        const segStep = Math.max(0.25, (yEnd - yStart) / 48);
+        for (let y = yStart; y <= yEnd; y += segStep) {
+          const wp = warpCoord(x, y);
+          const px = toPxX(wp.x);
+          const py = toPxY(wp.y);
+          if (y === yStart) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        if (!isAxis && x % labelStep === 0) {
+          ctx.fillStyle = "#565e70";
+          ctx.font = "10px Consolas, monospace";
+          const axisY = Math.max(12, Math.min(viewH - 6, toPxY(0) + 13));
+          ctx.fillText(x, toPxX(x) - 5, axisY);
+        }
+      }
+
+      for (let y = Math.ceil(yStart / gridStep) * gridStep; y <= yEnd; y += gridStep) {
+        const isAxis = y === 0;
+        ctx.strokeStyle = isAxis ? "rgba(245, 158, 11, 0.42)" : "rgba(255, 255, 255, 0.06)";
+        ctx.lineWidth = isAxis ? 1.3 : 1;
+        ctx.beginPath();
+        const segStep = Math.max(0.25, (xEnd - xStart) / 48);
+        for (let x = xStart; x <= xEnd; x += segStep) {
+          const wp = warpCoord(x, y);
+          const px = toPxX(wp.x);
+          const py = toPxY(wp.y);
+          if (x === xStart) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        }
+        ctx.stroke();
+
+        if (!isAxis && y % labelStep === 0) {
+          ctx.fillStyle = "#565e70";
+          ctx.font = "10px Consolas, monospace";
+          const axisX = Math.max(6, Math.min(viewW - 24, toPxX(0) + 5));
+          ctx.fillText(y, axisX, toPxY(y) + 3);
+        }
+      }
+
+      ctx.fillStyle = "#f59e0b";
+      ctx.font = "bold 10px Consolas, monospace";
+      ctx.fillText("0", toPxX(0) + 4, toPxY(0) + 12);
+    }
+
+    function drawWells() {
+      const u = unitPx();
+      currentStage.wells.forEach(w => {
+        const cx = toPxX(w.x);
+        const cy = toPxY(w.y);
+        const hr = w.horizonR * u;
+
+        const wave = Math.sin(tick * 0.04) * 3;
+        ctx.save();
+        ctx.strokeStyle = w.type === "blackhole" ? "rgba(167, 139, 250, 0.25)" : "rgba(236, 238, 242, 0.22)";
+        ctx.lineWidth = 1;
+        ctx.setLineDash([3, 4]);
+        ctx.beginPath();
+        ctx.arc(cx, cy, hr * 2.2 + wave, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+
+        if (w.type === "blackhole") {
+          const grad = ctx.createRadialGradient(cx, cy, hr * 0.75, cx, cy, hr * 2.0);
+          grad.addColorStop(0, "#000000");
+          grad.addColorStop(0.5, "rgba(167, 139, 250, 0.65)");
+          grad.addColorStop(1, "rgba(167, 139, 250, 0)");
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, hr * 2.0, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = "#030406";
+          ctx.strokeStyle = "#ef4444";
+          ctx.lineWidth = 1.8;
+          ctx.beginPath();
+          ctx.arc(cx, cy, hr, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          const grad = ctx.createRadialGradient(cx, cy, 2, cx, cy, hr * 1.9);
+          grad.addColorStop(0, "#ffffff");
+          grad.addColorStop(0.45, "#a78bfa");
+          grad.addColorStop(1, "rgba(167, 139, 250, 0)");
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(cx, cy, hr * 1.9, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = "#ef4444";
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          ctx.arc(cx, cy, hr, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        ctx.fillStyle = "#c4b5fd";
+        ctx.font = "bold 10px Consolas, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(`${w.name} (${w.x},${w.y})`, cx, cy + hr + 14);
+        ctx.textAlign = "left";
+      });
+    }
+
+    function drawObstacles() {
+      const u = unitPx();
+      currentStage.obstacles.forEach(obs => {
+        const cx = toPxX(obs.x);
+        const cy = toPxY(obs.y);
+        const r = obs.r * u;
+
+        const grad = ctx.createRadialGradient(cx - r * 0.25, cy - r * 0.25, r * 0.1, cx, cy, r);
+        grad.addColorStop(0, "#fbbf24");
+        grad.addColorStop(0.65, "#b45309");
+        grad.addColorStop(1, "#291202");
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(cx, cy, r, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "rgba(245, 158, 11, 0.55)";
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+
+        ctx.fillStyle = "#fef3c7";
+        ctx.font = "bold 10px Consolas, monospace";
+        ctx.textAlign = "center";
+        ctx.fillText(`${obs.name}`, cx, cy - 2);
+        ctx.fillText(`(${obs.x},${obs.y}) r=${obs.r}`, cx, cy + 10);
+        ctx.textAlign = "left";
+      });
+    }
+
+    function drawTarget() {
+      const u = unitPx();
+      const t = currentStage.target;
+      const cx = toPxX(t.x);
+      const cy = toPxY(t.y);
+      const r = t.r * u;
+
+      ctx.save();
+      ctx.strokeStyle = "rgba(16, 185, 129, 0.35)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 1.65, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+
+      const grad = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, 2, cx, cy, r);
+      grad.addColorStop(0, "#6ee7b7");
+      grad.addColorStop(0.65, "#10b981");
+      grad.addColorStop(1, "#064e3b");
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = "#10b981";
+      ctx.font = "bold 11px Consolas, monospace";
+      ctx.textAlign = "center";
+      ctx.fillText(`${t.name} (${t.x},${t.y})`, cx, cy - r - 10);
+      ctx.textAlign = "left";
+    }
+
+    function drawCraft(lx, ly, rad = 0, scale = 1) {
+      const cx = toPxX(lx);
+      const cy = toPxY(ly);
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(rad);
+      ctx.scale(scale, scale);
+
+      ctx.fillStyle = "#f59e0b";
+      ctx.beginPath();
+      ctx.moveTo(-9, 0);
+      ctx.lineTo(-17 - Math.random() * 5, -3);
+      ctx.lineTo(-17 - Math.random() * 5, 3);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "#eceef2";
+      ctx.beginPath();
+      ctx.moveTo(14, 0);
+      ctx.lineTo(-9, -7.5);
+      ctx.lineTo(-5, 0);
+      ctx.lineTo(-9, 7.5);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // 탐사선이 화면 경계 밖으로 나갔을 때 가장자리 추적 마커 표시
+    function drawOffscreenTracker(lx, ly) {
+      const rawPx = toPxX(lx);
+      const rawPy = toPxY(ly);
+      const isOutX = rawPx < 0 || rawPx > viewW;
+      const isOutY = rawPy < 0 || rawPy > viewH;
+      if (!isOutX && !isOutY) return;
+
+      const pad = 16;
+      const edgeX = Math.max(pad + 45, Math.min(viewW - pad - 45, rawPx));
+      const edgeY = Math.max(pad + 28, Math.min(viewH - pad - 28, rawPy));
+
+      ctx.save();
+      ctx.fillStyle = "rgba(9, 10, 13, 0.9)";
+      ctx.strokeStyle = "#f59e0b";
+      ctx.lineWidth = 1.2;
+
+      const arrow = rawPy < 0 ? "▲" : rawPy > viewH ? "▼" : rawPx < 0 ? "◀" : "▶";
+      const label = `${arrow} (${lx.toFixed(1)}, ${ly.toFixed(1)})`;
+
+      ctx.font = "bold 11px Consolas, monospace";
+      const tw = ctx.measureText(label).width;
+      const boxW = tw + 14;
+      const boxH = 22;
+
+      ctx.fillRect(edgeX - boxW / 2, edgeY - boxH / 2, boxW, boxH);
+      ctx.strokeRect(edgeX - boxW / 2, edgeY - boxH / 2, boxW, boxH);
+
+      ctx.fillStyle = "#f59e0b";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(label, edgeX, edgeY + 0.5);
+      ctx.restore();
+    }
+
+    function drawPolyline(pts, color, width, dashed = false) {
+      if (!pts || pts.length < 2) return;
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      if (dashed) ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      let started = false;
+      for (let i = 0; i < pts.length; i++) {
+        const pt = pts[i];
+        if (!Number.isFinite(pt.x) || !Number.isFinite(pt.y)) {
+          started = false;
+          continue;
+        }
+        const px = toPxX(pt.x);
+        const py = toPxY(pt.y);
+        if (!started) {
+          ctx.moveTo(px, py);
+          started = true;
+        } else {
+          ctx.lineTo(px, py);
+        }
+      }
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawPreviewOverlay() {
+      if (!showPreview) return;
+      const raw = document.getElementById("formulaInput").value;
+      const parsed = parseMathExpression(raw);
+      if (parsed.error) return;
+      const sim = computeTrajectory(parsed.fn);
+      if (sim.error) return;
+
+      if (currentStage.wells.length > 0) {
+        drawPolyline(sim.purePts, "rgba(138, 147, 166, 0.25)", 1.1, true);
+      }
+      drawPolyline(sim.bentPts, "rgba(245, 158, 11, 0.55)", 1.8, true);
+    }
+
+    function updateSparks() {
+      for (let i = sparks.length - 1; i >= 0; i--) {
+        const sp = sparks[i];
+        sp.x += sp.vx;
+        sp.y += sp.vy;
+        sp.life -= 0.028;
+        if (sp.life <= 0) {
+          sparks.splice(i, 1);
+          continue;
+        }
+        ctx.globalAlpha = sp.life;
+        ctx.fillStyle = sp.color;
+        ctx.fillRect(sp.x - 1.5, sp.y - 1.5, 3, 3);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    function renderFrame() {
+      tick++;
+      drawPlotterGrid();
+      drawPreviewOverlay();
+      drawWells();
+      drawObstacles();
+      drawTarget();
+
+      flightHistory.forEach(item => {
+        const col = item.status === "arrived"
+          ? "rgba(16, 185, 129, 0.85)"
+          : item.status === "sucked"
+            ? "rgba(167, 139, 250, 0.45)"
+            : "rgba(138, 147, 166, 0.35)";
+        drawPolyline(item.pts, col, item.status === "arrived" ? 2.5 : 1.4, false);
+      });
+
+      if (activeFlight && activeFlight.running) {
+        activeFlight.idx += (activeFlight.speed || 5);
+        const limit = Math.min(activeFlight.idx, activeFlight.pts.length);
+        const sub = activeFlight.pts.slice(0, limit);
+        drawPolyline(sub, "#f59e0b", 2.4, false);
+
+        const cur = sub[sub.length - 1];
+        const prev = sub[Math.max(0, sub.length - 2)];
+        const ang = Math.atan2(toPxY(cur.y) - toPxY(prev.y), toPxX(cur.x) - toPxX(prev.x));
+
+        let scale = 1;
+        if (activeFlight.outcome.status === "sucked" && limit > activeFlight.pts.length - 18) {
+          scale = Math.max(0.15, (activeFlight.pts.length - limit) / 18);
+        }
+        drawCraft(cur.x, cur.y, ang, scale);
+        drawOffscreenTracker(cur.x, cur.y);
+
+        if (activeFlight.idx >= activeFlight.pts.length) {
+          activeFlight.running = false;
+          const out = activeFlight.outcome;
+          flightHistory.push({ pts: activeFlight.pts, status: out.status });
+
+          if (out.status === "arrived") {
+            emitSparks(out.pos.x, out.pos.y, "#10b981", 40);
+            playSound(523.25, "triangle", 0.13, 0.08);
+            setTimeout(() => playSound(659.25, "triangle", 0.13, 0.08), 100);
+            setTimeout(() => playSound(783.99, "triangle", 0.25, 0.09), 200);
+
+            if (currentStage.id !== "RND") {
+              clearedSet.add(currentStage.id);
+              renderStageTabs();
+            }
+            showLog("ok", `<strong>[착륙 완료]</strong> ${attempts}회 시도 만에 '${currentStage.target.name}' 궤도에 안전하게 안착했습니다.`);
+            document.getElementById("nextStageBtn").classList.remove("hidden");
+          } else if (out.status === "sucked") {
+            emitSparks(out.pos.x, out.pos.y, "#a78bfa", 32);
+            playSound(200, "sawtooth", 0.35, 0.07, 55);
+            showLog("err", out.msg);
+          } else if (out.status === "crash") {
+            emitSparks(out.pos.x, out.pos.y, "#f59e0b", 32);
+            playSound(150, "sawtooth", 0.28, 0.07, 60);
+            showLog("err", out.msg);
+          } else {
+            playSound(230, "sine", 0.18, 0.05, 160);
+            showLog("err", out.msg);
+          }
+        }
+      } else {
+        const s = currentStage.ship;
+        drawCraft(s.x, s.y, 0, 1);
+        ctx.fillStyle = "#eceef2";
+        ctx.font = "bold 10px Consolas, monospace";
+        ctx.fillText(`START (${s.x},${s.y})`, toPxX(s.x) - 24, toPxY(s.y) - 14);
+      }
+
+      updateSparks();
+      requestAnimationFrame(renderFrame);
+    }
+
+    syncCanvasSize();
+    loadStage(0);
+    renderFrame();
+  </script>
+</body>
+</html>
